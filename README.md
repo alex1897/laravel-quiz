@@ -34,7 +34,7 @@ composer require harishdurga/laravel-quiz
 
 ### Class Diagram
 
-![LaravelQuiz](https://user-images.githubusercontent.com/10380630/173225090-8dc96205-1a08-4ed2-8954-1a53bccc7359.png)
+![LaravelQuiz](https://user-images.githubusercontent.com/10380630/182762726-de5d4b61-af3c-4d0f-b25d-dad986ff5b6e.jpg)
 
 ### Publish Vendor Files (config, mingrations,seeder)
 
@@ -182,6 +182,16 @@ $quiz = Quiz::create([
 ]);
 ```
 
+### Attach Topics To A Quiz
+
+```php
+$quiz->topics()->attach([$topic_one->id, $topic_two->id]);
+```
+
+### Topicable
+
+Topics can be attached to a quiz or a question. Questions can exist outside of the quiz context. For example you can create a question bank which you can filter based on the topics if attached.
+
 ### Negative Marking Settings
 
 By default negative marking is enabled for backward compatibility. You can disable it by setting the `enable_negative_marks` to false. Two types of negative marking are supported(`negative_marking_type`). `fixed` and `percentage`. Negative marking value defined at question level will be given precedence over the value defined at quiz level. If you want to set the negative marking value at quiz level, set the `negative_mark_value` to the value you want to set. If you want to set the negative marking value at question level, set the `negative_marks` of `QuizQuestion` to your desired value. No need to give a negative number instead the negative marks or percentage should be given in positive.
@@ -282,6 +292,65 @@ public function correct_options(): Collection
 ```
 
 Please refer unit and features tests for more understanding.
+
+### Validate A Quiz Question
+Instead of getting total score for the quiz attempt, you can use `QuizAttempt` model's `validate()` method. This method will return an array with a QuizQuestion model's 
+`id` as the key for the assoc array that will be returned.
+**Example:**
+```injectablephp
+$quizAttempt->validate($quizQuestion->id); //For a particular question
+$quizAttempt->validate(); //For all the questions in the quiz attempt
+$quizAttempt->validate($quizQuestion->id,$data); //$data can any type
+```
+```php
+[
+  1 => [
+    'score' => 10,
+    'is_correct' => true,
+    'correct_answer' => ['One','Five','Seven'],
+    'user_answer' => ['Five','One','Seven']
+  ],
+  2 => [
+    'score' => 0,
+    'is_correct' => false,
+    'correct_answer' => 'Hello There',
+    'user_answer' => 'Hello World'
+  ]
+]
+```
+To be able to render the user answer and correct answer for different types of question types other than the 3 types supported by the package, a new config option has been added.
+```php
+'render_answers_responses'    => [
+        1  => '\Harishdurga\LaravelQuiz\Models\QuizAttempt::renderQuestionType1Answers',
+        2  => '\Harishdurga\LaravelQuiz\Models\QuizAttempt::renderQuestionType2Answers',
+        3  => '\Harishdurga\LaravelQuiz\Models\QuizAttempt::renderQuestionType3Answers',
+    ]
+```
+By keeping the question type id as the key, you can put the path to your custom function to handle the question type. This custom method will be called from inside the 
+`validate()` method by passing the `QuizQuestion` object as the argument for your custom method as defined in the config.
+**Example:**
+```php
+public static function renderQuestionType1Answers(QuizQuestion $quizQuestion, mixed $data=null)
+    {
+        /**
+         * @var Question $actualQuestion
+         */
+        $actualQuestion = $quizQuestion->question;
+        $answers = $quizQuestion->answers;
+        $questionOptions = $actualQuestion->options;
+        $correctAnswer = $actualQuestion->correct_options()->first()?->option;
+        $givenAnswer = $answers->first()?->question_option_id;
+        foreach ($questionOptions as $questionOption) {
+            if ($questionOption->id == $givenAnswer) {
+                $givenAnswer = $questionOption->option;
+                break;
+            }
+        }
+        return [$correctAnswer, $givenAnswer];
+    }
+```
+As shown in the example you customer method should return an array with two elements the first one being the correct answer and the second element being the user's answer for the question.
+And whatever the `$data` you send to the `validate()` will be sent to these custom methods so that you can send additional data for rendering the answers.
 
 ### Testing
 
